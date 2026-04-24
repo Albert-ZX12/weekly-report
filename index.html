@@ -362,9 +362,17 @@
 // ============ DATA LAYER ============
 const DB = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
-  del(k) { localStorage.removeItem(k); }
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { console.error('存储失败', e); } },
+  del(k) { try { localStorage.removeItem(k); } catch(e) {} }
 };
+
+// 安全的密码编码（兼容中文和特殊字符）
+function encodePass(p) {
+  try { return btoa(unescape(encodeURIComponent(p))); } catch(e) { return btoa(p); }
+}
+function checkPass(input, stored) {
+  try { return encodePass(input) === stored; } catch(e) { return false; }
+}
 
 function getUsers() { return DB.get('wr_users') || []; }
 function saveUsers(u) { DB.set('wr_users', u); }
@@ -373,11 +381,16 @@ function saveReports(r) { DB.set('wr_reports', r); }
 
 // Init admin account if first run
 (function init() {
-  let users = getUsers();
-  if (!users.length) {
-    users = [{ username: 'admin', name: '管理员', password: btoa('admin123'), role: 'admin' }];
-    saveUsers(users);
-  }
+  try {
+    let users = getUsers();
+    if (!users.length) {
+      users = [{ username: 'admin', name: '管理员', password: encodePass('admin123'), role: 'admin' }];
+      saveUsers(users);
+    } else {
+      // 兼容旧版本 btoa 存储的密码（直接用btoa('admin123')存的）
+      // 不做迁移，保持现状
+    }
+  } catch(e) { console.error('初始化失败', e); }
 })();
 
 let currentUser = null;
@@ -394,7 +407,7 @@ function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
   const users = getUsers();
-  const user = users.find(x => x.username === u && x.password === btoa(p));
+  const user = users.find(x => x.username === u && checkPass(p, x.password));
   if (!user) { document.getElementById('login-err').textContent = '用户名或密码错误'; return; }
   currentUser = user;
   DB.set('wr_session', user.username);
@@ -411,7 +424,7 @@ function doRegister() {
   if (p.length < 6) { err.textContent = '密码至少6位'; return; }
   const users = getUsers();
   if (users.find(x => x.username === u)) { err.textContent = '用户名已存在'; return; }
-  users.push({ username: u, name, password: btoa(p), role: 'member' });
+  users.push({ username: u, name, password: encodePass(p), role: 'member' });
   saveUsers(users);
   err.textContent = '';
   showToast('注册成功，请登录');
@@ -426,25 +439,32 @@ function doLogout() {
 }
 
 function enterApp() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = '';
-  document.getElementById('top-username').textContent = currentUser.name;
-  document.getElementById('top-avatar').textContent = currentUser.name.slice(0,1);
-  if (currentUser.role === 'admin') {
-    document.getElementById('nav-admin').style.display = '';
-    document.getElementById('nav-users').style.display = '';
+  try {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('top-username').textContent = currentUser.name;
+    document.getElementById('top-avatar').textContent = currentUser.name.slice(0,1);
+    if (currentUser.role === 'admin') {
+      document.getElementById('nav-admin').style.display = '';
+      document.getElementById('nav-users').style.display = '';
+    }
+    currentWeekOffset = 0;
+    showView('my-report');
+  } catch(e) {
+    console.error('进入应用失败', e);
+    alert('页面加载失败，请刷新后重试');
   }
-  currentWeekOffset = 0;
-  showView('my-report');
 }
 
 // Auto-login from session
 window.addEventListener('DOMContentLoaded', () => {
-  const sess = DB.get('wr_session');
-  if (sess) {
-    const u = getUsers().find(x => x.username === sess);
-    if (u) { currentUser = u; enterApp(); }
-  }
+  try {
+    const sess = DB.get('wr_session');
+    if (sess) {
+      const u = getUsers().find(x => x.username === sess);
+      if (u) { currentUser = u; enterApp(); }
+    }
+  } catch(e) { console.error('自动登录失败', e); }
 });
 
 // ============ WEEK UTILS ============
@@ -676,7 +696,7 @@ function saveNewUser() {
   if (p.length < 6) { err.textContent = '密码至少6位'; return; }
   const users = getUsers();
   if (users.find(x => x.username === u)) { err.textContent = '用户名已存在'; return; }
-  users.push({ username: u, name, password: btoa(p), role });
+  users.push({ username: u, name, password: encodePass(p), role });
   saveUsers(users); closeModal(); renderUsers(); showToast('成员添加成功');
 }
 
@@ -704,7 +724,7 @@ function saveEditUser(username) {
   const users = getUsers();
   const u = users.find(x => x.username === username);
   u.name = name;
-  if (p) u.password = btoa(p);
+  if (p) u.password = encodePass(p);
   saveUsers(users); closeModal(); renderUsers(); showToast('修改成功');
 }
 
