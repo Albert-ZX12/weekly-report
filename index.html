@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>周报系统</title>
+
+<!-- ============ 在这里填写你的 Supabase 配置 ============ -->
+<script>
+  const SUPABASE_URL = 'https://obqeftjsudzgllpdxhap.supabase.co';       // 形如 https://xxxx.supabase.co
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9icWVmdGpzdWR6Z2xscGR4aGFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTA2MDQsImV4cCI6MjA5MjU2NjYwNH0.e9IYIH565qyfzkmflIODtnuDiw4DR8ERgavb5MoEQNo';  // 形如 eyJhbGci...
+</script>
+<!-- ====================================================== -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
 <style>
   :root {
     --bg: #f5f4f0;
@@ -19,134 +29,106 @@
     --accent-text: #1b4332;
     --danger: #c0392b;
     --danger-light: #fdf0ef;
-    --warn: #d68910;
-    --warn-light: #fef9ec;
-    --shadow: 0 1px 4px rgba(0,0,0,0.08);
     --radius: 10px;
     --radius-sm: 6px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+  body { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  /* ---- LOADING ---- */
+  #loading-screen {
+    position: fixed; inset: 0; background: #1b4332;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999;
+    transition: opacity 0.4s;
+  }
+  #loading-screen.hide { opacity: 0; pointer-events: none; }
+  .loading-logo { font-size: 32px; font-weight: 700; color: #fff; margin-bottom: 10px; letter-spacing: -0.5px; }
+  .loading-sub { color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 32px; }
+  .loading-bar { width: 200px; height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden; }
+  .loading-bar-inner { height: 100%; background: #fff; border-radius: 2px; animation: loadbar 1.2s ease-in-out infinite; }
+  @keyframes loadbar { 0%{width:0;margin-left:0} 50%{width:60%;margin-left:20%} 100%{width:0;margin-left:100%} }
 
   /* ---- AUTH ---- */
   #auth-screen {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    display: none; min-height: 100vh; align-items: center; justify-content: center;
     background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 60%, #40916c 100%);
   }
-  .auth-box {
-    background: var(--surface); border-radius: 16px; padding: 40px 36px;
-    width: 360px; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-  }
+  #auth-screen.show { display: flex; }
+  .auth-box { background: var(--surface); border-radius: 16px; padding: 40px 36px; width: 360px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
   .auth-logo { font-size: 28px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: -0.5px; }
   .auth-sub { color: var(--text3); font-size: 13px; margin-bottom: 28px; }
   .auth-box label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 4px; margin-top: 14px; }
-  .auth-box input {
-    width: 100%; padding: 9px 12px; border: 1px solid var(--border);
-    border-radius: var(--radius-sm); font-size: 14px; outline: none; background: var(--surface2);
-    transition: border-color 0.15s;
-  }
+  .auth-box input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; outline: none; background: var(--surface2); transition: border-color 0.15s; }
   .auth-box input:focus { border-color: var(--accent); background: #fff; }
-  .btn-primary {
-    width: 100%; padding: 10px; background: var(--accent); color: #fff;
-    border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
-    cursor: pointer; margin-top: 20px; transition: background 0.15s;
-  }
+  .btn-primary { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; transition: background 0.15s; }
   .btn-primary:hover { background: var(--accent-text); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
   .auth-err { color: var(--danger); font-size: 12px; margin-top: 8px; min-height: 16px; }
-  .auth-tabs { display: flex; gap: 0; margin-bottom: 20px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+  .auth-tabs { display: flex; margin-bottom: 20px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
   .auth-tab { flex: 1; padding: 8px; text-align: center; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: all 0.15s; }
   .auth-tab.active { background: var(--accent); color: #fff; font-weight: 600; }
 
-  /* ---- LAYOUT ---- */
+  /* ---- APP LAYOUT ---- */
   #app { display: none; min-height: 100vh; }
-  .topbar {
-    position: sticky; top: 0; z-index: 100;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; padding: 0 24px; height: 56px; gap: 16px;
-    box-shadow: var(--shadow);
-  }
+  #app.show { display: block; }
+  .topbar { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; height: 56px; gap: 16px; box-shadow: var(--shadow); }
   .topbar-logo { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
   .topbar-spacer { flex: 1; }
-  .user-badge {
-    display: flex; align-items: center; gap: 8px; cursor: pointer;
-    padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
-    background: var(--surface2); font-size: 13px; color: var(--text2);
-    transition: border-color 0.15s;
-  }
+  .user-badge { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); font-size: 13px; color: var(--text2); transition: border-color 0.15s; }
   .user-badge:hover { border-color: var(--border2); }
   .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-light); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
-  .nav-btn {
-    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
-    background: transparent; font-size: 13px; cursor: pointer; color: var(--text2);
-    transition: all 0.15s;
-  }
+  .nav-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; font-size: 13px; cursor: pointer; color: var(--text2); transition: all 0.15s; }
   .nav-btn:hover { background: var(--surface2); }
   .nav-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
   .main { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
 
   /* ---- VIEWS ---- */
   .view { display: none; }
   .view.active { display: block; }
 
-  /* ---- WEEK PICKER ---- */
+  /* ---- WEEK NAV ---- */
   .week-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
   .week-nav { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); font-size: 16px; transition: all 0.15s; }
   .week-nav:hover { border-color: var(--accent); color: var(--accent); }
-  .week-label { font-size: 16px; font-weight: 600; color: var(--text); }
+  .week-label { font-size: 16px; font-weight: 600; }
   .week-sub { font-size: 12px; color: var(--text3); }
+  .current-badge { background: var(--accent-light); color: var(--accent-text); padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
 
   /* ---- REPORT FORM ---- */
   .report-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; margin-bottom: 16px; }
   .section-title { font-size: 13px; font-weight: 600; color: var(--accent-text); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
   .section-title::before { content: ''; display: inline-block; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
-
   .task-list { display: flex; flex-direction: column; gap: 8px; }
   .task-row { display: flex; align-items: flex-start; gap: 8px; }
-  .task-row textarea {
-    flex: 1; padding: 8px 10px; border: 1px solid var(--border);
-    border-radius: var(--radius-sm); font-size: 13px; resize: vertical; min-height: 40px;
-    font-family: inherit; outline: none; background: var(--surface2); color: var(--text); transition: border-color 0.15s;
-  }
+  .task-row textarea { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; resize: vertical; min-height: 40px; font-family: inherit; outline: none; background: var(--surface2); color: var(--text); transition: border-color 0.15s; }
   .task-row textarea:focus { border-color: var(--accent); background: #fff; }
-  .task-status {
-    padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    font-size: 12px; cursor: pointer; outline: none; background: var(--surface2); color: var(--text2);
-    white-space: nowrap; height: 36px;
-  }
+  .task-status { padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; outline: none; background: var(--surface2); color: var(--text2); height: 36px; }
   .del-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--text3); font-size: 16px; border-radius: 4px; flex-shrink: 0; margin-top: 4px; }
   .del-btn:hover { color: var(--danger); background: var(--danger-light); }
   .add-btn { display: flex; align-items: center; gap: 4px; padding: 7px 12px; border: 1px dashed var(--border2); border-radius: var(--radius-sm); background: transparent; cursor: pointer; font-size: 13px; color: var(--text3); margin-top: 8px; transition: all 0.15s; }
   .add-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
-
-  .summary-area {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    font-size: 13px; min-height: 80px; resize: vertical; font-family: inherit; outline: none;
-    background: var(--surface2); color: var(--text); line-height: 1.7; transition: border-color 0.15s;
-  }
+  .summary-area { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; min-height: 80px; resize: vertical; font-family: inherit; outline: none; background: var(--surface2); color: var(--text); line-height: 1.7; transition: border-color 0.15s; }
   .summary-area:focus { border-color: var(--accent); background: #fff; }
-
   .save-bar { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 8px; }
   .btn-save { padding: 9px 22px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
   .btn-save:hover { background: var(--accent-text); }
+  .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
   .save-tip { font-size: 12px; color: var(--text3); }
 
-  /* ---- STATUS BADGES ---- */
+  /* ---- BADGES ---- */
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
   .badge-done { background: #e8f5ee; color: #1b4332; }
   .badge-progress { background: #fef9ec; color: #7d5a00; }
   .badge-todo { background: #eff3fb; color: #1a4480; }
   .badge-blocked { background: #fdf0ef; color: #7f1d1d; }
+  .badge-unsubmit { background: #fff0e6; color: #7d3c00; }
 
   /* ---- HISTORY ---- */
   .history-grid { display: flex; flex-direction: column; gap: 12px; }
-  .history-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 20px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
-    display: flex; align-items: center; gap: 16px;
-  }
+  .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; display: flex; align-items: center; gap: 16px; }
   .history-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(45,106,79,0.08); }
-  .history-week { font-size: 14px; font-weight: 600; color: var(--text); }
+  .history-week { font-size: 14px; font-weight: 600; }
   .history-dates { font-size: 12px; color: var(--text3); }
   .history-stats { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
   .stat-pill { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; border: 1px solid; }
@@ -154,14 +136,14 @@
   .stat-progress { background: #fef9ec; color: #7d5a00; border-color: #fad781; }
   .stat-todo { background: #eff3fb; color: #1a4480; border-color: #b8cef0; }
 
-  /* ---- DETAIL VIEW ---- */
+  /* ---- DETAIL ---- */
   .back-btn { display: flex; align-items: center; gap: 6px; color: var(--text2); cursor: pointer; font-size: 13px; margin-bottom: 20px; padding: 6px 0; border: none; background: transparent; }
   .back-btn:hover { color: var(--accent); }
   .readonly-task { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .readonly-task:last-child { border-bottom: none; }
-  .readonly-task-text { flex: 1; font-size: 13px; color: var(--text); }
+  .readonly-task-text { flex: 1; font-size: 13px; }
 
-  /* ---- ADMIN VIEW ---- */
+  /* ---- ADMIN ---- */
   .admin-filter { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
   .admin-filter select, .admin-filter input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); outline: none; color: var(--text); }
   .admin-filter select:focus, .admin-filter input:focus { border-color: var(--accent); }
@@ -171,12 +153,12 @@
   .admin-table td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .admin-table tr:last-child td { border-bottom: none; }
   .admin-table tr:hover td { background: var(--surface2); }
-  .admin-table td a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .admin-table td a { color: var(--accent); cursor: pointer; }
   .admin-table td a:hover { text-decoration: underline; }
 
-  /* ---- USER MGMT ---- */
+  /* ---- USERS ---- */
   .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .page-title { font-size: 20px; font-weight: 700; color: var(--text); }
+  .page-title { font-size: 20px; font-weight: 700; }
   .btn-sm { padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
   .btn-outline { border: 1px solid var(--border); background: transparent; color: var(--text2); }
   .btn-outline:hover { border-color: var(--border2); background: var(--surface2); }
@@ -184,6 +166,10 @@
   .btn-accent:hover { background: var(--accent-text); }
   .btn-danger { border: none; background: var(--danger); color: #fff; }
   .btn-danger:hover { background: #a93226; }
+  .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+  .role-tag { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 500; }
+  .role-admin { background: #e8f5ee; color: #1b4332; }
+  .role-member { background: #eff3fb; color: #1a4480; }
 
   /* ---- MODAL ---- */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: none; align-items: center; justify-content: center; }
@@ -194,55 +180,58 @@
   .modal input, .modal select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; outline: none; }
   .modal input:focus, .modal select:focus { border-color: var(--accent); }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .modal-err { color: var(--danger); font-size: 12px; margin-top: 6px; min-height: 16px; }
 
   .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
-  .empty-icon { font-size: 36px; margin-bottom: 12px; }
   .empty-title { font-size: 15px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 
   .toast { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; z-index: 300; opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateY(0); }
-
-  /* role indicator */
-  .role-tag { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 500; }
-  .role-admin { background: #e8f5ee; color: #1b4332; }
-  .role-member { background: #eff3fb; color: #1a4480; }
+  .toast.error { background: var(--danger); }
 
   @media (max-width: 600px) {
     .main { padding: 16px 12px; }
     .topbar { padding: 0 12px; }
     .history-stats { display: none; }
-    .admin-filter { flex-direction: column; align-items: stretch; }
+    .auth-box { width: 90vw; padding: 28px 20px; }
   }
 </style>
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="loading-logo">📋 周报系统</div>
+  <div class="loading-sub">正在连接数据库...</div>
+  <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+</div>
+
+<!-- AUTH -->
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">📋 周报系统</div>
     <div class="auth-sub">团队周报填写与管理平台</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')">登录</button>
-      <button class="auth-tab" onclick="switchAuthTab('register')" id="reg-tab">注册</button>
+      <button class="auth-tab active" onclick="switchTab('login')">登录</button>
+      <button class="auth-tab" onclick="switchTab('register')">注册</button>
     </div>
     <div id="login-form">
       <label>用户名</label>
-      <input type="text" id="login-user" placeholder="请输入用户名" />
+      <input id="l-user" placeholder="请输入用户名" onkeydown="if(event.key==='Enter')doLogin()" />
       <label>密码</label>
-      <input type="password" id="login-pass" placeholder="请输入密码" />
-      <div class="auth-err" id="login-err"></div>
-      <button class="btn-primary" onclick="doLogin()">登 录</button>
+      <input id="l-pass" type="password" placeholder="请输入密码" onkeydown="if(event.key==='Enter')doLogin()" />
+      <div class="auth-err" id="l-err"></div>
+      <button class="btn-primary" id="l-btn" onclick="doLogin()">登 录</button>
     </div>
     <div id="register-form" style="display:none">
       <label>用户名</label>
-      <input type="text" id="reg-user" placeholder="3-12位字母数字" />
+      <input id="r-user" placeholder="3-12位字母数字下划线" />
       <label>姓名（显示名）</label>
-      <input type="text" id="reg-name" placeholder="如：张三" />
+      <input id="r-name" placeholder="如：张三" />
       <label>密码</label>
-      <input type="password" id="reg-pass" placeholder="至少6位" />
-      <div class="auth-err" id="reg-err"></div>
-      <button class="btn-primary" onclick="doRegister()">注 册</button>
+      <input id="r-pass" type="password" placeholder="至少6位" />
+      <div class="auth-err" id="r-err"></div>
+      <button class="btn-primary" id="r-btn" onclick="doRegister()">注 册</button>
     </div>
   </div>
 </div>
@@ -252,71 +241,60 @@
   <div class="topbar">
     <div class="topbar-logo">📋 周报系统</div>
     <div style="display:flex;gap:6px;margin-left:16px">
-      <button class="nav-btn active" onclick="showView('my-report')" id="nav-my">我的周报</button>
-      <button class="nav-btn" onclick="showView('history')" id="nav-history">历史记录</button>
-      <button class="nav-btn" onclick="showView('admin')" id="nav-admin" style="display:none">团队总览</button>
-      <button class="nav-btn" onclick="showView('users')" id="nav-users" style="display:none">成员管理</button>
+      <button class="nav-btn active" id="nav-my" onclick="showView('my-report')">我的周报</button>
+      <button class="nav-btn" id="nav-history" onclick="showView('history')">历史记录</button>
+      <button class="nav-btn" id="nav-admin" style="display:none" onclick="showView('admin')">团队总览</button>
+      <button class="nav-btn" id="nav-users" style="display:none" onclick="showView('users')">成员管理</button>
     </div>
     <div class="topbar-spacer"></div>
     <div class="user-badge" onclick="doLogout()">
       <div class="avatar" id="top-avatar">U</div>
-      <span id="top-username">用户</span>
+      <span id="top-name">用户</span>
       <span style="color:var(--text3);font-size:11px">退出</span>
     </div>
   </div>
 
   <div class="main">
 
-    <!-- MY REPORT VIEW -->
+    <!-- MY REPORT -->
     <div class="view active" id="view-my-report">
       <div class="week-header">
         <button class="week-nav" onclick="changeWeek(-1)">‹</button>
         <div>
-          <div class="week-label" id="week-label-text">第 XX 周</div>
-          <div class="week-sub" id="week-date-range">日期范围</div>
+          <div class="week-label" id="week-label"></div>
+          <div class="week-sub" id="week-range"></div>
         </div>
         <button class="week-nav" onclick="changeWeek(1)">›</button>
-        <div id="current-week-badge" style="display:none;margin-left:4px;background:var(--accent-light);color:var(--accent-text);padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600">本周</div>
+        <span class="current-badge" id="week-cur-badge" style="display:none">本周</span>
       </div>
-
-      <!-- Completed tasks -->
       <div class="report-card">
         <div class="section-title">本周完成事项</div>
         <div class="task-list" id="done-list"></div>
         <button class="add-btn" onclick="addTask('done')">＋ 添加完成事项</button>
       </div>
-
-      <!-- In-progress tasks -->
       <div class="report-card">
         <div class="section-title">进行中事项</div>
         <div class="task-list" id="progress-list"></div>
         <button class="add-btn" onclick="addTask('progress')">＋ 添加进行中事项</button>
       </div>
-
-      <!-- Next week plan -->
       <div class="report-card">
         <div class="section-title">下周计划</div>
         <div class="task-list" id="todo-list"></div>
         <button class="add-btn" onclick="addTask('todo')">＋ 添加下周计划</button>
       </div>
-
-      <!-- Summary -->
       <div class="report-card">
         <div class="section-title">总结与备注</div>
         <textarea class="summary-area" id="summary-text" placeholder="本周工作总结、遇到的问题、需要协调的事项..."></textarea>
       </div>
-
       <div class="save-bar">
         <span class="save-tip" id="save-tip"></span>
-        <button class="btn-save" onclick="saveReport()">保存周报</button>
+        <button class="btn-save" id="save-btn" onclick="saveReport()">保存周报</button>
       </div>
     </div>
 
-    <!-- HISTORY VIEW -->
+    <!-- HISTORY LIST -->
     <div class="view" id="view-history">
-      <div class="section-head">
-        <div class="page-title">历史周报</div>
-      </div>
+      <div class="section-head"><div class="page-title">历史周报</div></div>
       <div id="history-list" class="history-grid"></div>
     </div>
 
@@ -326,11 +304,9 @@
       <div id="detail-content"></div>
     </div>
 
-    <!-- ADMIN VIEW -->
+    <!-- ADMIN -->
     <div class="view" id="view-admin">
-      <div class="section-head">
-        <div class="page-title">团队周报总览</div>
-      </div>
+      <div class="section-head"><div class="page-title">团队周报总览</div></div>
       <div class="admin-filter">
         <select id="admin-week-sel" onchange="renderAdmin()"></select>
         <input type="text" id="admin-search" placeholder="搜索成员..." oninput="renderAdmin()" style="width:160px">
@@ -338,7 +314,7 @@
       <div class="admin-table" id="admin-table-wrap"></div>
     </div>
 
-    <!-- USERS VIEW -->
+    <!-- USERS -->
     <div class="view" id="view-users">
       <div class="section-head">
         <div class="page-title">成员管理</div>
@@ -359,113 +335,20 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ============ DATA LAYER ============
-const DB = {
-  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { console.error('存储失败', e); } },
-  del(k) { try { localStorage.removeItem(k); } catch(e) {} }
-};
-
-// 安全的密码编码（兼容中文和特殊字符）
-function encodePass(p) {
-  try { return btoa(unescape(encodeURIComponent(p))); } catch(e) { return btoa(p); }
-}
-function checkPass(input, stored) {
-  try { return encodePass(input) === stored; } catch(e) { return false; }
+// ============ SUPABASE CLIENT ============
+let sb;
+try {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch(e) {
+  document.querySelector('.loading-sub').textContent = '配置错误，请检查 SUPABASE_URL 和 SUPABASE_KEY';
 }
 
-function getUsers() { return DB.get('wr_users') || []; }
-function saveUsers(u) { DB.set('wr_users', u); }
-function getReports() { return DB.get('wr_reports') || []; }
-function saveReports(r) { DB.set('wr_reports', r); }
-
-// Init admin account if first run
-(function init() {
-  try {
-    let users = getUsers();
-    if (!users.length) {
-      users = [{ username: 'admin', name: '管理员', password: encodePass('admin123'), role: 'admin' }];
-      saveUsers(users);
-    } else {
-      // 兼容旧版本 btoa 存储的密码（直接用btoa('admin123')存的）
-      // 不做迁移，保持现状
-    }
-  } catch(e) { console.error('初始化失败', e); }
-})();
-
-let currentUser = null;
-let currentWeekOffset = 0; // 0 = this week
-
-// ============ AUTH ============
-function switchAuthTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (tab === 'login')));
-  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
-  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
-}
-
-function doLogin() {
-  const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value;
-  const users = getUsers();
-  const user = users.find(x => x.username === u && checkPass(p, x.password));
-  if (!user) { document.getElementById('login-err').textContent = '用户名或密码错误'; return; }
-  currentUser = user;
-  DB.set('wr_session', user.username);
-  enterApp();
-}
-
-function doRegister() {
-  const u = document.getElementById('reg-user').value.trim();
-  const name = document.getElementById('reg-name').value.trim();
-  const p = document.getElementById('reg-pass').value;
-  const err = document.getElementById('reg-err');
-  if (!u || !/^[a-zA-Z0-9_]{3,12}$/.test(u)) { err.textContent = '用户名3-12位字母数字下划线'; return; }
-  if (!name) { err.textContent = '请填写显示名'; return; }
-  if (p.length < 6) { err.textContent = '密码至少6位'; return; }
-  const users = getUsers();
-  if (users.find(x => x.username === u)) { err.textContent = '用户名已存在'; return; }
-  users.push({ username: u, name, password: encodePass(p), role: 'member' });
-  saveUsers(users);
-  err.textContent = '';
-  showToast('注册成功，请登录');
-  switchAuthTab('login');
-  document.getElementById('login-user').value = u;
-}
-
-function doLogout() {
-  currentUser = null; DB.del('wr_session');
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('auth-screen').style.display = '';
-}
-
-function enterApp() {
-  try {
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('top-username').textContent = currentUser.name;
-    document.getElementById('top-avatar').textContent = currentUser.name.slice(0,1);
-    if (currentUser.role === 'admin') {
-      document.getElementById('nav-admin').style.display = '';
-      document.getElementById('nav-users').style.display = '';
-    }
-    currentWeekOffset = 0;
-    showView('my-report');
-  } catch(e) {
-    console.error('进入应用失败', e);
-    alert('页面加载失败，请刷新后重试');
-  }
-}
-
-// Auto-login from session
-window.addEventListener('DOMContentLoaded', () => {
-  try {
-    const sess = DB.get('wr_session');
-    if (sess) {
-      const u = getUsers().find(x => x.username === sess);
-      if (u) { currentUser = u; enterApp(); }
-    }
-  } catch(e) { console.error('自动登录失败', e); }
-});
+// ============ STATE ============
+let currentUser = null;   // { id, username, name, role }
+let currentWeekOffset = 0;
+let reportData = { done: [], progress: [], todo: [], summary: '' };
+let allReports = [];      // cache for admin view
+let allUsers = [];        // cache for admin/users view
 
 // ============ WEEK UTILS ============
 function getWeekInfo(offset) {
@@ -473,18 +356,131 @@ function getWeekInfo(offset) {
   const day = now.getDay() || 7;
   const mon = new Date(now);
   mon.setDate(now.getDate() - day + 1 + offset * 7);
-  mon.setHours(0,0,0,0);
+  mon.setHours(0, 0, 0, 0);
   const sun = new Date(mon);
   sun.setDate(mon.getDate() + 6);
   const year = mon.getFullYear();
   const startOfYear = new Date(year, 0, 1);
   const weekNum = Math.ceil(((mon - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
   const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
-  const isoKey = mon.toISOString().slice(0,10);
-  return { mon, sun, weekNum, year, label: `${year} 年第 ${weekNum} 周`, range: `${fmt(mon)} ~ ${fmt(sun)}`, key: isoKey };
+  return {
+    key: mon.toISOString().slice(0, 10),
+    label: `${year} 年第 ${weekNum} 周`,
+    range: `${fmt(mon)} ~ ${fmt(sun)}`
+  };
 }
 
-function getReportKey(username, weekKey) { return `${username}_${weekKey}`; }
+// ============ INIT ============
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!sb) return;
+  // Check existing session
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await loadUserProfile(session.user.id);
+  } else {
+    hideLoading();
+  }
+});
+
+async function loadUserProfile(authId) {
+  const { data, error } = await sb.from('users').select('*').eq('auth_id', authId).single();
+  if (data) {
+    currentUser = data;
+    enterApp();
+  } else {
+    hideLoading();
+  }
+}
+
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  el.classList.add('hide');
+  setTimeout(() => { el.style.display = 'none'; }, 400);
+  document.getElementById('auth-screen').classList.add('show');
+}
+
+// ============ AUTH ============
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (tab === 'login')));
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+}
+
+async function doLogin() {
+  const u = document.getElementById('l-user').value.trim();
+  const p = document.getElementById('l-pass').value;
+  const err = document.getElementById('l-err');
+  const btn = document.getElementById('l-btn');
+  if (!u || !p) { err.textContent = '请填写用户名和密码'; return; }
+  err.textContent = ''; btn.disabled = true; btn.textContent = '登录中...';
+  try {
+    // Find user by username to get their email
+    const { data: userRow } = await sb.from('users').select('email').eq('username', u).single();
+    if (!userRow) { err.textContent = '用户名或密码错误'; return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email: userRow.email, password: p });
+    if (error) { err.textContent = '用户名或密码错误'; return; }
+    await loadUserProfile(data.user.id);
+  } catch(e) {
+    err.textContent = '登录失败，请重试';
+  } finally {
+    btn.disabled = false; btn.textContent = '登 录';
+  }
+}
+
+async function doRegister() {
+  const u = document.getElementById('r-user').value.trim();
+  const name = document.getElementById('r-name').value.trim();
+  const p = document.getElementById('r-pass').value;
+  const err = document.getElementById('r-err');
+  const btn = document.getElementById('r-btn');
+  if (!u || !/^[a-zA-Z0-9_]{3,12}$/.test(u)) { err.textContent = '用户名3-12位字母数字下划线'; return; }
+  if (!name) { err.textContent = '请填写姓名'; return; }
+  if (p.length < 6) { err.textContent = '密码至少6位'; return; }
+  err.textContent = ''; btn.disabled = true; btn.textContent = '注册中...';
+  try {
+    // Check username uniqueness
+    const { data: exists } = await sb.from('users').select('id').eq('username', u).single();
+    if (exists) { err.textContent = '用户名已被使用'; return; }
+    // Use username@weeklyreport.app as internal email
+    const email = `${u}@wr-internal.local`;
+    const { data, error } = await sb.auth.signUp({ email, password: p });
+    if (error) { err.textContent = '注册失败：' + error.message; return; }
+    // Insert user profile
+    const { error: e2 } = await sb.from('users').insert({ auth_id: data.user.id, username: u, name, email, role: 'member' });
+    if (e2) { err.textContent = '保存用户信息失败'; return; }
+    showToast('注册成功，请登录');
+    switchTab('login');
+    document.getElementById('l-user').value = u;
+  } catch(e) {
+    err.textContent = '注册出错，请重试';
+  } finally {
+    btn.disabled = false; btn.textContent = '注 册';
+  }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').classList.add('show');
+}
+
+function enterApp() {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('auth-screen').classList.remove('show');
+  const app = document.getElementById('app');
+  app.style.display = 'block';
+  app.classList.add('show');
+  document.getElementById('top-name').textContent = currentUser.name;
+  document.getElementById('top-avatar').textContent = currentUser.name.slice(0, 1);
+  if (currentUser.role === 'admin') {
+    document.getElementById('nav-admin').style.display = '';
+    document.getElementById('nav-users').style.display = '';
+  }
+  currentWeekOffset = 0;
+  showView('my-report');
+}
 
 // ============ NAVIGATION ============
 function showView(name) {
@@ -495,30 +491,35 @@ function showView(name) {
   if (navMap[name]) { const el = document.getElementById(navMap[name]); if (el) el.classList.add('active'); }
   if (name === 'my-report') renderReport();
   if (name === 'history') renderHistory();
-  if (name === 'admin') renderAdminWeekSel(), renderAdmin();
+  if (name === 'admin') renderAdminInit();
   if (name === 'users') renderUsers();
 }
 
 function changeWeek(d) { currentWeekOffset += d; renderReport(); }
 
 // ============ REPORT FORM ============
-let reportData = { done: [], progress: [], todo: [], summary: '' };
-
-function renderReport() {
+async function renderReport() {
   const wi = getWeekInfo(currentWeekOffset);
-  document.getElementById('week-label-text').textContent = wi.label;
-  document.getElementById('week-date-range').textContent = wi.range;
-  document.getElementById('current-week-badge').style.display = currentWeekOffset === 0 ? '' : 'none';
+  document.getElementById('week-label').textContent = wi.label;
+  document.getElementById('week-range').textContent = wi.range;
+  document.getElementById('week-cur-badge').style.display = currentWeekOffset === 0 ? '' : 'none';
+  document.getElementById('save-tip').textContent = '加载中...';
 
-  const key = getReportKey(currentUser.username, wi.key);
-  const saved = getReports().find(r => r.key === key);
-  reportData = saved ? JSON.parse(JSON.stringify(saved)) : { key, username: currentUser.username, weekKey: wi.key, weekLabel: wi.label, weekRange: wi.range, done: [], progress: [], todo: [], summary: '' };
+  const { data } = await sb.from('reports')
+    .select('*').eq('user_id', currentUser.id).eq('week_key', wi.key).single();
+
+  if (data) {
+    reportData = { done: data.done || [], progress: data.progress || [], todo: data.todo || [], summary: data.summary || '' };
+    document.getElementById('save-tip').textContent = `上次保存：${new Date(data.updated_at).toLocaleString('zh-CN',{hour12:false})}`;
+  } else {
+    reportData = { done: [], progress: [], todo: [], summary: '' };
+    document.getElementById('save-tip').textContent = '尚未填写';
+  }
 
   renderList('done-list', reportData.done);
   renderList('progress-list', reportData.progress);
   renderList('todo-list', reportData.todo);
-  document.getElementById('summary-text').value = reportData.summary || '';
-  document.getElementById('save-tip').textContent = saved ? `上次保存: ${saved.savedAt || ''}` : '';
+  document.getElementById('summary-text').value = reportData.summary;
 }
 
 function renderList(containerId, items) {
@@ -544,128 +545,140 @@ function renderList(containerId, items) {
 }
 
 function addTask(type) {
-  const listMap = { done: reportData.done, progress: reportData.progress, todo: reportData.todo };
+  const map = { done: reportData.done, progress: reportData.progress, todo: reportData.todo };
   const statusMap = { done: 'done', progress: 'progress', todo: 'todo' };
-  listMap[type].push({ text: '', status: statusMap[type] });
+  map[type].push({ text: '', status: statusMap[type] });
   const idMap = { done: 'done-list', progress: 'progress-list', todo: 'todo-list' };
-  renderList(idMap[type], listMap[type]);
+  renderList(idMap[type], map[type]);
   document.getElementById(idMap[type]).lastElementChild.querySelector('textarea').focus();
 }
 
-function saveReport() {
+async function saveReport() {
   reportData.summary = document.getElementById('summary-text').value;
   const wi = getWeekInfo(currentWeekOffset);
-  reportData.key = getReportKey(currentUser.username, wi.key);
-  reportData.username = currentUser.username;
-  reportData.name = currentUser.name;
-  reportData.weekKey = wi.key;
-  reportData.weekLabel = wi.label;
-  reportData.weekRange = wi.range;
-  reportData.savedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g,'-');
-  const reports = getReports().filter(r => r.key !== reportData.key);
-  reports.push(JSON.parse(JSON.stringify(reportData)));
-  saveReports(reports);
-  document.getElementById('save-tip').textContent = `上次保存: ${reportData.savedAt}`;
-  showToast('周报保存成功 ✓');
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try {
+    const payload = {
+      user_id: currentUser.id,
+      week_key: wi.key,
+      week_label: wi.label,
+      week_range: wi.range,
+      done: reportData.done,
+      progress: reportData.progress,
+      todo: reportData.todo,
+      summary: reportData.summary,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await sb.from('reports').upsert(payload, { onConflict: 'user_id,week_key' });
+    if (error) { showToast('保存失败：' + error.message, true); return; }
+    document.getElementById('save-tip').textContent = `上次保存：${new Date().toLocaleString('zh-CN',{hour12:false})}`;
+    showToast('周报保存成功 ✓');
+  } finally {
+    btn.disabled = false; btn.textContent = '保存周报';
+  }
 }
 
 // ============ HISTORY ============
-function renderHistory() {
-  const reports = getReports().filter(r => r.username === currentUser.username).sort((a,b) => b.weekKey.localeCompare(a.weekKey));
+async function renderHistory() {
   const el = document.getElementById('history-list');
-  if (!reports.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📄</div><div class="empty-title">暂无周报记录</div><div>填写并保存本周周报后，历史记录将显示在这里</div></div>`;
+  el.innerHTML = '<div class="empty-state"><div class="save-tip">加载中...</div></div>';
+  const { data } = await sb.from('reports').select('*').eq('user_id', currentUser.id).order('week_key', { ascending: false });
+  if (!data || !data.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-title">暂无周报记录</div><div>填写并保存本周周报后，历史记录将显示在这里</div></div>`;
     return;
   }
-  el.innerHTML = reports.map(r => {
-    const done = r.done.filter(t=>t.status==='done').length + r.done.length;
-    const prog = r.progress.length;
-    const todo = r.todo.length;
-    return `<div class="history-card" onclick="showDetail('${r.key}')">
+  el.innerHTML = data.map(r => `
+    <div class="history-card" onclick='showDetail(${JSON.stringify(r.id)})'>
       <div>
-        <div class="history-week">${r.weekLabel}</div>
-        <div class="history-dates">${r.weekRange}</div>
+        <div class="history-week">${r.week_label}</div>
+        <div class="history-dates">${r.week_range}</div>
       </div>
       <div class="history-stats">
-        ${r.done.length ? `<div class="stat-pill stat-done">✅ 完成 ${r.done.length}</div>` : ''}
-        ${r.progress.length ? `<div class="stat-pill stat-progress">🔄 进行中 ${r.progress.length}</div>` : ''}
-        ${r.todo.length ? `<div class="stat-pill stat-todo">📌 计划 ${r.todo.length}</div>` : ''}
+        ${r.done?.length ? `<div class="stat-pill stat-done">✅ 完成 ${r.done.length}</div>` : ''}
+        ${r.progress?.length ? `<div class="stat-pill stat-progress">🔄 进行 ${r.progress.length}</div>` : ''}
+        ${r.todo?.length ? `<div class="stat-pill stat-todo">📌 计划 ${r.todo.length}</div>` : ''}
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
-function showDetail(key) {
-  const r = getReports().find(x => x.key === key);
+async function showDetail(id) {
+  const { data: r } = await sb.from('reports').select('*').eq('id', id).single();
   if (!r) return;
+  const statusMap = { done: 'badge-done', progress: 'badge-progress', todo: 'badge-todo', blocked: 'badge-blocked' };
+  const statusLabel = { done: '已完成', progress: '进行中', todo: '待办', blocked: '受阻' };
   const renderSection = (title, items) => {
-    if (!items || !items.length) return '';
-    const statusMap = { done:'badge-done', progress:'badge-progress', todo:'badge-todo', blocked:'badge-blocked' };
-    const statusLabel = { done:'已完成', progress:'进行中', todo:'待办', blocked:'受阻' };
+    if (!items?.length) return '';
     return `<div class="report-card">
       <div class="section-title">${title}</div>
-      ${items.map(t=>`<div class="readonly-task">
+      ${items.map(t => `<div class="readonly-task">
         <span class="badge ${statusMap[t.status]||'badge-todo'}">${statusLabel[t.status]||'待办'}</span>
-        <div class="readonly-task-text">${t.text||'（未填写）'}</div>
+        <div class="readonly-task-text">${t.text || '（未填写）'}</div>
       </div>`).join('')}
     </div>`;
   };
   document.getElementById('detail-content').innerHTML = `
     <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
-      <div class="page-title">${r.weekLabel}</div>
-      <div style="color:var(--text3);font-size:13px">${r.weekRange}</div>
+      <div class="page-title">${r.week_label}</div>
+      <div style="color:var(--text3);font-size:13px">${r.week_range}</div>
     </div>
     ${renderSection('本周完成事项', r.done)}
     ${renderSection('进行中事项', r.progress)}
     ${renderSection('下周计划', r.todo)}
-    ${r.summary ? `<div class="report-card"><div class="section-title">总结与备注</div><div style="font-size:13px;color:var(--text);line-height:1.8;white-space:pre-wrap">${r.summary}</div></div>` : ''}
-  `;
+    ${r.summary ? `<div class="report-card"><div class="section-title">总结与备注</div><div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${r.summary}</div></div>` : ''}`;
+  document.getElementById('view-detail').dataset.prevReportId = id;
   showView('detail');
 }
 
 // ============ ADMIN ============
-function renderAdminWeekSel() {
-  const reports = getReports();
-  const weeks = [...new Set(reports.map(r => r.weekKey))].sort().reverse();
+async function renderAdminInit() {
+  const { data: reports } = await sb.from('reports').select('*').order('week_key', { ascending: false });
+  const { data: users } = await sb.from('users').select('*').order('name');
+  allReports = reports || [];
+  allUsers = users || [];
+
+  const weeks = [...new Set(allReports.map(r => r.week_key))].sort().reverse();
   const sel = document.getElementById('admin-week-sel');
-  const cur = sel.value;
-  sel.innerHTML = weeks.map(w => `<option value="${w}" ${w===cur?'selected':''}>${w}</option>`).join('');
-  if (!sel.value && weeks.length) sel.value = weeks[0];
+  sel.innerHTML = weeks.map(w => `<option value="${w}">${w}</option>`).join('');
+  renderAdmin();
 }
 
 function renderAdmin() {
   const weekKey = document.getElementById('admin-week-sel').value;
   const search = document.getElementById('admin-search').value.trim().toLowerCase();
-  const reports = getReports().filter(r => r.weekKey === weekKey);
-  const users = getUsers().filter(u => u.role === 'member' || u.role === 'admin');
-  const filtered = users.filter(u => !search || u.name.toLowerCase().includes(search) || u.username.toLowerCase().includes(search));
+  const reports = allReports.filter(r => r.week_key === weekKey);
+  const users = allUsers.filter(u => !search || u.name.toLowerCase().includes(search) || u.username.toLowerCase().includes(search));
   const wrap = document.getElementById('admin-table-wrap');
-  if (!filtered.length) { wrap.innerHTML = `<div class="empty-state"><div class="empty-title">暂无成员</div></div>`; return; }
+  if (!users.length) { wrap.innerHTML = `<div class="empty-state"><div class="empty-title">暂无成员</div></div>`; return; }
   wrap.innerHTML = `<table>
     <thead><tr><th>成员</th><th>完成</th><th>进行中</th><th>计划</th><th>状态</th><th>操作</th></tr></thead>
-    <tbody>${filtered.map(u => {
-      const r = reports.find(x => x.username === u.username);
-      if (!r) return `<tr><td><b>${u.name}</b> <span style="color:var(--text3);font-size:12px">${u.username}</span></td><td>-</td><td>-</td><td>-</td><td><span class="badge" style="background:#fff0e6;color:#7d3c00">未提交</span></td><td>-</td></tr>`;
+    <tbody>${users.map(u => {
+      const r = reports.find(x => x.user_id === u.id);
+      if (!r) return `<tr><td><b>${u.name}</b> <span style="color:var(--text3);font-size:12px">${u.username}</span></td><td>-</td><td>-</td><td>-</td><td><span class="badge badge-unsubmit">未提交</span></td><td>-</td></tr>`;
       return `<tr><td><b>${u.name}</b> <span style="color:var(--text3);font-size:12px">${u.username}</span></td>
-        <td>${r.done.length}</td><td>${r.progress.length}</td><td>${r.todo.length}</td>
+        <td>${r.done?.length||0}</td><td>${r.progress?.length||0}</td><td>${r.todo?.length||0}</td>
         <td><span class="badge badge-done">已提交</span></td>
-        <td><a onclick="showDetail('${r.key}')">查看</a></td></tr>`;
+        <td><a onclick="showDetail('${r.id}')">查看</a></td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
 // ============ USER MANAGEMENT ============
-function renderUsers() {
-  const users = getUsers();
+async function renderUsers() {
   const wrap = document.getElementById('users-table-wrap');
+  wrap.innerHTML = '<div class="empty-state"><div class="save-tip">加载中...</div></div>';
+  const { data: users } = await sb.from('users').select('*').order('name');
+  allUsers = users || [];
+  if (!users?.length) { wrap.innerHTML = `<div class="empty-state"><div class="empty-title">暂无成员</div></div>`; return; }
   wrap.innerHTML = `<table>
     <thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>操作</th></tr></thead>
     <tbody>${users.map(u => `<tr>
       <td>${u.username}</td><td>${u.name}</td>
       <td><span class="role-tag ${u.role==='admin'?'role-admin':'role-member'}">${u.role==='admin'?'管理员':'成员'}</span></td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn-sm btn-outline" onclick="openEditUser('${u.username}')">编辑</button>
-        ${u.username !== currentUser.username ? `<button class="btn-sm btn-danger" onclick="deleteUser('${u.username}')">删除</button>` : ''}
-        ${u.role !== 'admin' ? `<button class="btn-sm btn-accent" onclick="setAdmin('${u.username}')">设为管理员</button>` : ''}
+        <button class="btn-sm btn-outline" onclick="openEditUser('${u.id}','${u.name}')">编辑姓名</button>
+        <button class="btn-sm btn-outline" onclick="openResetPass('${u.id}','${u.name}')">重置密码</button>
+        ${u.id !== currentUser.id ? `<button class="btn-sm btn-danger" onclick="deleteUser('${u.id}','${u.name}')">删除</button>` : ''}
+        ${u.role !== 'admin' ? `<button class="btn-sm btn-accent" onclick="setAdmin('${u.id}')">设为管理员</button>` : ''}
       </td>
     </tr>`).join('')}</tbody></table>`;
 }
@@ -673,85 +686,116 @@ function renderUsers() {
 function openAddUser() {
   document.getElementById('modal-body').innerHTML = `
     <h3>添加成员</h3>
-    <label>用户名</label><input id="m-uname" placeholder="3-12位字母数字" />
+    <label>用户名</label><input id="m-uname" placeholder="3-12位字母数字下划线" />
     <label>姓名</label><input id="m-name" placeholder="显示名" />
-    <label>密码</label><input type="password" id="m-pass" placeholder="至少6位" />
+    <label>初始密码</label><input type="password" id="m-pass" placeholder="至少6位" />
     <label>角色</label><select id="m-role"><option value="member">成员</option><option value="admin">管理员</option></select>
-    <div style="color:var(--danger);font-size:12px;margin-top:6px" id="m-err"></div>
+    <div class="modal-err" id="m-err"></div>
     <div class="modal-actions">
       <button class="btn-sm btn-outline" onclick="closeModal()">取消</button>
-      <button class="btn-sm btn-accent" onclick="saveNewUser()">确认添加</button>
+      <button class="btn-sm btn-accent" id="m-confirm" onclick="saveNewUser()">确认添加</button>
     </div>`;
   openModal();
 }
 
-function saveNewUser() {
+async function saveNewUser() {
   const u = document.getElementById('m-uname').value.trim();
   const name = document.getElementById('m-name').value.trim();
   const p = document.getElementById('m-pass').value;
   const role = document.getElementById('m-role').value;
   const err = document.getElementById('m-err');
+  const btn = document.getElementById('m-confirm');
   if (!u || !/^[a-zA-Z0-9_]{3,12}$/.test(u)) { err.textContent = '用户名3-12位字母数字下划线'; return; }
   if (!name) { err.textContent = '请填写姓名'; return; }
   if (p.length < 6) { err.textContent = '密码至少6位'; return; }
-  const users = getUsers();
-  if (users.find(x => x.username === u)) { err.textContent = '用户名已存在'; return; }
-  users.push({ username: u, name, password: encodePass(p), role });
-  saveUsers(users); closeModal(); renderUsers(); showToast('成员添加成功');
+  err.textContent = ''; btn.disabled = true; btn.textContent = '添加中...';
+  try {
+    const { data: exists } = await sb.from('users').select('id').eq('username', u).single();
+    if (exists) { err.textContent = '用户名已存在'; return; }
+    const email = `${u}@wr-internal.local`;
+    const { data, error } = await sb.auth.signUp({ email, password: p });
+    if (error) { err.textContent = '创建失败：' + error.message; return; }
+    await sb.from('users').insert({ auth_id: data.user.id, username: u, name, email, role });
+    closeModal(); renderUsers(); showToast('成员添加成功');
+  } catch(e) { err.textContent = '操作失败，请重试'; }
+  finally { btn.disabled = false; btn.textContent = '确认添加'; }
 }
 
-function openEditUser(username) {
-  const users = getUsers();
-  const u = users.find(x => x.username === username);
+function openEditUser(id, name) {
   document.getElementById('modal-body').innerHTML = `
-    <h3>编辑成员 · ${u.name}</h3>
-    <label>姓名</label><input id="m-name" value="${u.name}" />
-    <label>新密码（留空不修改）</label><input type="password" id="m-pass" placeholder="至少6位" />
-    <div style="color:var(--danger);font-size:12px;margin-top:6px" id="m-err"></div>
+    <h3>编辑姓名</h3>
+    <label>新姓名</label><input id="m-name" value="${name}" />
+    <div class="modal-err" id="m-err"></div>
     <div class="modal-actions">
       <button class="btn-sm btn-outline" onclick="closeModal()">取消</button>
-      <button class="btn-sm btn-accent" onclick="saveEditUser('${username}')">保存</button>
+      <button class="btn-sm btn-accent" id="m-confirm" onclick="saveEditUser('${id}')">保存</button>
     </div>`;
   openModal();
 }
 
-function saveEditUser(username) {
+async function saveEditUser(id) {
   const name = document.getElementById('m-name').value.trim();
-  const p = document.getElementById('m-pass').value;
   const err = document.getElementById('m-err');
   if (!name) { err.textContent = '姓名不能为空'; return; }
-  if (p && p.length < 6) { err.textContent = '密码至少6位'; return; }
-  const users = getUsers();
-  const u = users.find(x => x.username === username);
-  u.name = name;
-  if (p) u.password = encodePass(p);
-  saveUsers(users); closeModal(); renderUsers(); showToast('修改成功');
+  const btn = document.getElementById('m-confirm');
+  btn.disabled = true;
+  await sb.from('users').update({ name }).eq('id', id);
+  closeModal(); renderUsers(); showToast('修改成功');
 }
 
-function deleteUser(username) {
-  if (!confirm(`确认删除用户 ${username}？其周报数据也将一并删除。`)) return;
-  saveUsers(getUsers().filter(u => u.username !== username));
-  saveReports(getReports().filter(r => r.username !== username));
+function openResetPass(id, name) {
+  document.getElementById('modal-body').innerHTML = `
+    <h3>重置密码 · ${name}</h3>
+    <label>新密码</label><input type="password" id="m-pass" placeholder="至少6位" />
+    <div class="modal-err" id="m-err"></div>
+    <div class="modal-actions">
+      <button class="btn-sm btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn-sm btn-accent" id="m-confirm" onclick="saveResetPass('${id}')">确认重置</button>
+    </div>`;
+  openModal();
+}
+
+async function saveResetPass(id) {
+  const p = document.getElementById('m-pass').value;
+  const err = document.getElementById('m-err');
+  if (p.length < 6) { err.textContent = '密码至少6位'; return; }
+  const btn = document.getElementById('m-confirm');
+  btn.disabled = true; btn.textContent = '重置中...';
+  // Get auth_id first
+  const { data: u } = await sb.from('users').select('auth_id').eq('id', id).single();
+  if (!u) { err.textContent = '找不到用户'; btn.disabled = false; btn.textContent = '确认重置'; return; }
+  // Use admin API via edge function (or just update via Supabase dashboard)
+  // Since we can't call admin API from frontend, we store a reset request
+  const { error } = await sb.from('password_resets').upsert({ user_id: id, new_password_hash: btoa(p), requested_at: new Date().toISOString() });
+  if (error) { err.textContent = '请到 Supabase 后台手动重置密码'; btn.disabled = false; btn.textContent = '确认重置'; return; }
+  closeModal(); showToast('密码重置请求已提交，请在 Supabase 后台执行');
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`确认删除成员「${name}」？其所有周报也将一并删除。`)) return;
+  await sb.from('reports').delete().eq('user_id', id);
+  await sb.from('users').delete().eq('id', id);
   renderUsers(); showToast('已删除');
 }
 
-function setAdmin(username) {
-  const users = getUsers();
-  users.find(u => u.username === username).role = 'admin';
-  saveUsers(users); renderUsers(); showToast('已设为管理员');
+async function setAdmin(id) {
+  await sb.from('users').update({ role: 'admin' }).eq('id', id);
+  renderUsers(); showToast('已设为管理员');
 }
 
 // ============ MODAL / TOAST ============
 function openModal() { document.getElementById('modal').classList.add('open'); }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
-document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, isError) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 </script>
 </body>
